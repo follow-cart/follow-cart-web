@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>객체 인식 영상</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/object_detection.css') }}">
+</head>
+<body>
+    <div class="camera-container">
+        <img id="camera_feed" src="/video_feed" alt="Camera Feed"/>
+    </div>
+    <div class="button-container">
+        <button class="navigation-button" onclick="window.location.href='/'">기존 영상</button>
+    </div>
+</body>
+</html>
+
