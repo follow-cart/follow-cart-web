@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>로봇 카메라 영상 웹</title>
+    <title>fc_web</title>
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/styles.css') }}">
 
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/easeljs/lib/easeljs.min.js"></script>
@@ -11,8 +11,11 @@
 
 </head>
 <body>
-    <div id="map" style="width: 800px; height: 600px; border: 1px solid black;"></div>
+
+    <canvas id="mapCanvas" width="800" height="600"></canvas>
+
     <div class="direction-container">
+
         <div class="button-row">
             <button class="direction-button" id="forward">↑</button>
         </div>
@@ -26,110 +29,140 @@
         </div>
     </div>
     <div class="command-container">
-        <button class="command-button" id="call">호출</button>
+        <button class="command-button" id="call">호출</button
         <button class="command-button" id="return">반환</button>
     </div>
     <script type="text/javascript">
 
-        // Connect to ROS
         var ros = new ROSLIB.Ros({
-          url: 'ws://localhost:9090'
+            url: 'ws://localhost:9090'  // rosbridge_server의 WebSocket 주소
         });
 
-        ros.on('connection', function() {
-          console.log('Connected to websocket server.');
+        ros.on('connection', function () {
+            console.log('Connected to ROS');
         });
 
-        ros.on('error', function(error) {
-          console.log('Error connecting to websocket server: ', error);
+        ros.on('error', function (error) {
+            console.error('Error connecting to ROS:', error);
         });
 
-        ros.on('close', function() {
-          console.log('Connection to websocket server closed.');
+        ros.on('close', function () {
+            console.log('Connection to ROS closed');
         });
 
-        // Create the main viewer
-        var viewer = new ROS2D.Viewer({
-          divID : 'map',
-          width : 800,
-          height : 600
+        var canvas = document.getElementById('mapCanvas');
+        var ctx = canvas.getContext('2d');
+
+        var mapClient = new ROSLIB.Topic({
+            ros: ros,
+            name: '/map',
+            messageType: 'nav_msgs/OccupancyGrid'
         });
 
-        // 터프 생성
-        var gridClient = new ROS2D.OccupancyGridClient({
-          ros: ros,
-          rootObject: viewer.scene,
-          continuous: true,
-          topic: '/map'
-        });
+        // 맵 데이터를 받아와서 90도 회전하여 캔버스에 그리는 함수
+        function drawRotatedMap(message) {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // 초기 뷰 설정
-        gridClient.on('change', function() {
-          viewer.scaleToDimensions(gridClient.currentGrid.width, gridClient.currentGrid.height);
-          viewer.shift(gridClient.currentGrid.pose.position.x, gridClient.currentGrid.pose.position.y);
-        });
+            var mapData = message.data;
+            var mapWidth = message.info.width;
+            var mapHeight = message.info.height;
+            var resolution = message.info.resolution * 20;
 
-        function sendMoveCommand(direction) {
-            fetch('/move', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ direction: direction })
-            }).then(response => {
-                if (response.ok) {
-                    console.log(`Moving ${direction}`);
-                } else {
-                    console.error(`Failed to move ${direction}`);
+            // Dynamically set Canvas size based on map dimensions
+            canvas.width = mapHeight * resolution;  // 맵의 세로길이 * 해상도
+            canvas.height = mapWidth * resolution;  // 맵의 가로길이 * 해상도
+
+            // Save the current canvas state
+            ctx.save();
+
+            // Translate the origin to the center of the canvas
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+
+            // Rotate the canvas by 90 degrees clockwise (in radians)
+            ctx.rotate(Math.PI / 2);  // 90도 회전 (π/2 radian)
+
+            // Offset to center the map correctly after rotation
+            var offsetX = -mapWidth * resolution / 2;
+            var offsetY = -mapHeight * resolution / 2;
+
+            // Draw map
+            for (var x = 0; x < mapWidth; x++) {
+                for (var y = 0; y < mapHeight; y++) {
+                    var value = mapData[x + y * mapWidth];
+                    ctx.fillStyle = value === 100 ? 'black' : (value === 0 ? 'white' : 'gray');
+                    ctx.fillRect(offsetX + x * resolution, offsetY + y * resolution, resolution, resolution);
                 }
-            });
+            }
+
+            // Restore the canvas state to prevent affecting future drawings
+            ctx.restore();
         }
 
-        function sendCommand(cmd) {
-            fetch('/command', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ direction: direction })
-            }).then(response => {
-                if (response.ok) {
-                    console.log(`executing ${cmd}`);
-                } else {
-                    console.error(`Failed to execute ${cmd}`);
-                }
-            });
-        }
+        mapClient.subscribe(function (message) {
+            drawRotatedMap(message);
+        });
 
-        // 각 방향 버튼에 대한 클릭 이벤트 핸들러 설정
-        document.getElementById('forward').onclick = function() {
-            sendMoveCommand('forward');
-        };
+<!--        function sendMoveCommand(direction) {-->
+<!--            fetch('/move', {-->
+<!--                method: 'POST',-->
+<!--                headers: {-->
+<!--                    'Content-Type': 'application/json'-->
+<!--                },-->
+<!--                body: JSON.stringify({ direction: direction })-->
+<!--            }).then(response => {-->
+<!--                if (response.ok) {-->
+<!--                    console.log(Moving ${direction});-->
+<!--                } else {-->
+<!--                    console.error(Failed to move ${direction});-->
+<!--                }-->
+<!--            });-->
+<!--        }-->
 
-        document.getElementById('backward').onclick = function() {
-            sendMoveCommand('backward');
-        };
+<!--        function sendCommand(cmd) {-->
+<!--            fetch('/command', {-->
+<!--                method: 'POST',-->
+<!--                headers: {-->
+<!--                    'Content-Type': 'application/json'-->
+<!--                },-->
+<!--                body: JSON.stringify({ direction: direction })-->
+<!--            }).then(response => {-->
+<!--                if (response.ok) {-->
+<!--                    console.log(executing ${cmd});-->
+<!--                } else {-->
+<!--                    console.error(Failed to execute ${cmd});-->
+<!--                }-->
+<!--            });-->
+<!--        }-->
 
-        document.getElementById('left').onclick = function() {
-            sendMoveCommand('left');
-        };
+<!--        // 각 방향 버튼에 대한 클릭 이벤트 핸들러 설정-->
+<!--        document.getElementById('forward').onclick = function() {-->
+<!--            sendMoveCommand('forward');-->
+<!--        };-->
 
-        document.getElementById('right').onclick = function() {
-            sendMoveCommand('right');
-        };
-        document.getElementById('stop').onclick = function() {
-            sendMoveCommand('stop');
-        };
+<!--        document.getElementById('backward').onclick = function() {-->
+<!--            sendMoveCommand('backward');-->
+<!--        };-->
 
-        // 호출, 반환 버튼에 대한 클릭 이벤트 핸들러 설정
-        document.getElementById('call').onclick = function() {
-            sendCommand('call');
-        };
+<!--        document.getElementById('left').onclick = function() {-->
+<!--            sendMoveCommand('left');-->
+<!--        };-->
 
-        document.getElementById('return').onclick = function() {
-            sendCommand('return');
-        };
+<!--        document.getElementById('right').onclick = function() {-->
+<!--            sendMoveCommand('right');-->
+<!--        };-->
+<!--        document.getElementById('stop').onclick = function() {-->
+<!--            sendMoveCommand('stop');-->
+<!--        };-->
+
+<!--        // 호출, 반환 버튼에 대한 클릭 이벤트 핸들러 설정-->
+<!--        document.getElementById('call').onclick = function() {-->
+<!--            sendCommand('call');-->
+<!--        };-->
+
+<!--        document.getElementById('return').onclick = function() {-->
+<!--            sendCommand('return');-->
+<!--        };-->
     </script>
 </body>
 </html>
-
