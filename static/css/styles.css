@@ -4,37 +4,6 @@ body {
     align-items: center;
 }
 
-.main-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative;
-    margin-top: 20px;
-}
-
-.camera-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-#camera_feed {
-    width: 1280px;
-    height: 1024px;
-}
-
-.button-container {
-    position: absolute;
-    right: -400px;
-}
-
-.navigation-button {
-    padding: 15px 30px;
-    font-size: 20px;
-    font-weight: bold;
-    cursor: pointer;
-}
-
 .direction-container {
     text-align: center;
     margin-top: 20px;
@@ -53,7 +22,5 @@ body {
     justify-content: center;
 }
 
-.button-space {
-    width: 100px;
-}
+
 
