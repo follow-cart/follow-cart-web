@@ -8,30 +8,33 @@
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/eventemitter2/lib/eventemitter2.min.js"></script>
     <script type="text/javascript" src="https://s3.eu-west-1.amazonaws.com/rosject.io/js/roslib.min.js"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/ros2d/build/ros2d.min.js"></script>
-
 </head>
 <body>
 
-    <canvas id="mapCanvas" width="800" height="600"></canvas>
+    <div class="container">
+        <canvas id="mapCanvas" width="800" height="600"></canvas>
 
-    <div class="direction-container">
-
-        <div class="button-row">
-            <button class="direction-button" id="forward">↑</button>
-        </div>
-        <div class="button-row">
-            <button class="direction-button" id="left">←</button>
-            <button class="direction-button" id="stop">■</button>
-            <button class="direction-button" id="right">→</button>
-        </div>
-        <div class="button-row">
-            <button class="direction-button" id="backward">↓</button>
+        <div class="controls">
+            <div class="direction-container">
+                <div class="button-row">
+                    <button class="direction-button" id="forward">↑</button>
+                </div>
+                <div class="button-row">
+                    <button class="direction-button" id="left">←</button>
+                    <button class="direction-button" id="stop">■</button>
+                    <button class="direction-button" id="right">→</button>
+                </div>
+                <div class="button-row">
+                    <button class="direction-button" id="backward">↓</button>
+                </div>
+            </div>
+            <div class="command-container">
+                <button class="command-button" id="call">호출</button>
+                <button class="command-button" id="return">반환</button>
+            </div>
         </div>
     </div>
-    <div class="command-container">
-        <button class="command-button" id="call">호출</button
-        <button class="command-button" id="return">반환</button>
-    </div>
+
     <script type="text/javascript">
 
         var ros = new ROSLIB.Ros({
@@ -53,40 +56,41 @@
         var canvas = document.getElementById('mapCanvas');
         var ctx = canvas.getContext('2d');
 
-        var mapClient = new ROSLIB.Topic({
-            ros: ros,
-            name: '/map',
-            messageType: 'nav_msgs/OccupancyGrid'
-        });
+        var robotPositions = [];
+
 
         // 맵 데이터를 받아와서 90도 회전하여 캔버스에 그리는 함수
         function drawRotatedMap(message) {
-            // Clear canvas
+
+            if (!message) return; // message가 null일 경우 return
+
+            // 캔버스 초기화
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             var mapData = message.data;
             var mapWidth = message.info.width;
             var mapHeight = message.info.height;
-            var resolution = message.info.resolution * 20;
+            var resolution = message.info.resolution * 50;
 
-            // Dynamically set Canvas size based on map dimensions
-            canvas.width = mapHeight * resolution;  // 맵의 세로길이 * 해상도
-            canvas.height = mapWidth * resolution;  // 맵의 가로길이 * 해상도
+            // 맵의 크기에 따라 캔버스 크기 동적으로 설정
+            canvas.width = mapHeight * resolution;
+            canvas.height = mapWidth * resolution;
 
-            // Save the current canvas state
+            // 현재 캔버스 상태 저장
             ctx.save();
 
-            // Translate the origin to the center of the canvas
+            // 캔버스 원점을 중앙으로 이동
             ctx.translate(canvas.width / 2, canvas.height / 2);
 
-            // Rotate the canvas by 90 degrees clockwise (in radians)
-            ctx.rotate(Math.PI / 2);  // 90도 회전 (π/2 radian)
+            // 캔버스를 시계방향으로 90도 회전
+            ctx.rotate(Math.PI / 2);
 
-            // Offset to center the map correctly after rotation
+
+            // 회전 후 맵을 중앙에 맞추기 위한 오프셋
             var offsetX = -mapWidth * resolution / 2;
             var offsetY = -mapHeight * resolution / 2;
 
-            // Draw map
+            // 맵 그리기
             for (var x = 0; x < mapWidth; x++) {
                 for (var y = 0; y < mapHeight; y++) {
                     var value = mapData[x + y * mapWidth];
@@ -95,74 +99,116 @@
                 }
             }
 
-            // Restore the canvas state to prevent affecting future drawings
+            // 로봇 위치 그리기
+            robotPositions.forEach(function (position) {
+                var posX = position.x * resolution;
+                var posY = position.y * resolution;
+                ctx.fillStyle = 'red';
+                ctx.beginPath();
+                ctx.arc(posX, posY, 5, 0, 2 * Math.PI);
+                ctx.closePath();
+                ctx.fill();
+            });
+
+
+            // 캔버스 상태 복원
             ctx.restore();
         }
 
+        var mapClient = new ROSLIB.Topic({
+            ros: ros,
+            name: '/map',
+            messageType: 'nav_msgs/OccupancyGrid'
+        });
+
+        // 로봇 위치를 구독하는 예제
+        var robotPoseClient = new ROSLIB.Topic({
+            ros: ros,
+            name: '/convoy/amcl_pose',  // 로봇의 실제 위치 토픽으로 바꿔야 함
+            messageType: 'geometry_msgs/PoseWithCovarianceStamped'
+        });
+
+        var lastMapMessage = null;
+
         mapClient.subscribe(function (message) {
+            lastMapMessage = message;
             drawRotatedMap(message);
         });
 
-<!--        function sendMoveCommand(direction) {-->
-<!--            fetch('/move', {-->
-<!--                method: 'POST',-->
-<!--                headers: {-->
-<!--                    'Content-Type': 'application/json'-->
-<!--                },-->
-<!--                body: JSON.stringify({ direction: direction })-->
-<!--            }).then(response => {-->
-<!--                if (response.ok) {-->
-<!--                    console.log(Moving ${direction});-->
-<!--                } else {-->
-<!--                    console.error(Failed to move ${direction});-->
-<!--                }-->
-<!--            });-->
-<!--        }-->
+        robotPoseClient.subscribe(function (message) {
+            var robotPosition = {
+                x: message.pose.pose.position.x,
+                y: message.pose.pose.position.y
+            };
+            console.log('로봇 위치 수신:', robotPosition);
+            robotPositions = [robotPosition]; // 다수의 로봇 위치를 처리하려면 이 부분을 수정해야 함
+            drawRotatedMap(lastMapMessage); // lastMapMessage는 마지막 맵 메시지를 저장하는 변수여야 함
+        });
 
-<!--        function sendCommand(cmd) {-->
-<!--            fetch('/command', {-->
-<!--                method: 'POST',-->
-<!--                headers: {-->
-<!--                    'Content-Type': 'application/json'-->
-<!--                },-->
-<!--                body: JSON.stringify({ direction: direction })-->
-<!--            }).then(response => {-->
-<!--                if (response.ok) {-->
-<!--                    console.log(executing ${cmd});-->
-<!--                } else {-->
-<!--                    console.error(Failed to execute ${cmd});-->
-<!--                }-->
-<!--            });-->
-<!--        }-->
 
-<!--        // 각 방향 버튼에 대한 클릭 이벤트 핸들러 설정-->
-<!--        document.getElementById('forward').onclick = function() {-->
-<!--            sendMoveCommand('forward');-->
-<!--        };-->
 
-<!--        document.getElementById('backward').onclick = function() {-->
-<!--            sendMoveCommand('backward');-->
-<!--        };-->
 
-<!--        document.getElementById('left').onclick = function() {-->
-<!--            sendMoveCommand('left');-->
-<!--        };-->
+        function sendMoveCommand(direction) {
+            fetch('/move', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ direction: direction })
+            }).then(response => {
+                if (response.ok) {
+                    console.log(`Moving ${direction}`);
+                } else {
+                    console.error(`Failed to move ${direction}`);
+                }
+            });
+        }
 
-<!--        document.getElementById('right').onclick = function() {-->
-<!--            sendMoveCommand('right');-->
-<!--        };-->
-<!--        document.getElementById('stop').onclick = function() {-->
-<!--            sendMoveCommand('stop');-->
-<!--        };-->
+        function sendCommand(cmd) {
+            fetch('/command', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ command: cmd })
+            }).then(response => {
+                if (response.ok) {
+                    console.log(`Executing ${cmd}`);
+                } else {
+                    console.error(`Failed to execute ${cmd}`);
+                }
+            });
+        }
 
-<!--        // 호출, 반환 버튼에 대한 클릭 이벤트 핸들러 설정-->
-<!--        document.getElementById('call').onclick = function() {-->
-<!--            sendCommand('call');-->
-<!--        };-->
+        // 각 방향 버튼에 대한 클릭 이벤트 핸들러 설정
+        document.getElementById('forward').onclick = function() {
+            sendMoveCommand('forward');
+        };
 
-<!--        document.getElementById('return').onclick = function() {-->
-<!--            sendCommand('return');-->
-<!--        };-->
+        document.getElementById('backward').onclick = function() {
+            sendMoveCommand('backward');
+        };
+
+        document.getElementById('left').onclick = function() {
+            sendMoveCommand('left');
+        };
+
+        document.getElementById('right').onclick = function() {
+            sendMoveCommand('right');
+        };
+
+        document.getElementById('stop').onclick = function() {
+            sendMoveCommand('stop');
+        };
+
+        // 호출, 반환 버튼에 대한 클릭 이벤트 핸들러 설정
+        document.getElementById('call').onclick = function() {
+            sendCommand('call');
+        };
+
+        document.getElementById('return').onclick = function() {
+            sendCommand('return');
+        };
     </script>
 </body>
 </html>

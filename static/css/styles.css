@@ -4,22 +4,33 @@ body {
     align-items: center;
 }
 
-.direction-container {
+.container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.controls {
     text-align: center;
     margin-top: 20px;
 }
 
-.direction-button {
-    width: 70px;
-    height: 70px;
-    font-size: 24px;
-    font-weight: bold;
-    margin: 15px;
+.direction-container, .command-container {
+    text-align: center;
+    margin-top: 20px;
 }
 
 .button-row {
     display: flex;
     justify-content: center;
+}
+
+.direction-button, .command-button {
+    width: 70px;
+    height: 70px;
+    font-size: 24px;
+    font-weight: bold;
+    margin: 15px;
 }
 
 
